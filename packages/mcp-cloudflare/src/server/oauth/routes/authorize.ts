@@ -102,7 +102,7 @@ export default new Hono<{ Bindings: Env }>()
       return c.text("Invalid resource parameter", 400);
     }
 
-    // Preserve resource in state (library's AuthRequest doesn't include it)
+    // Preserve resource in state, not exported upstream
     const oauthReqInfoWithResource: AuthRequestWithPermissions = {
       ...oauthReqInfo,
       ...(resourceParam ? { resource: resourceParam } : {}),
