@@ -1,0 +1,30 @@
+{
+  "name": "@sentry/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight CLI for interacting with Sentry via MCP server",
+  "bin": {
+    "sentry": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "catalog:",
+    "chalk": "catalog:",
+    "commander": "catalog:",
+    "dotenv": "catalog:"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
