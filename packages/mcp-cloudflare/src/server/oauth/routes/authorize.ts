@@ -165,28 +165,7 @@ export default new Hono<{ Bindings: Env }>()
       permissions,
     };
 
-    // Validate resource parameter per RFC 8707
-    const resourceFromState = oauthReqWithPermissions.resource;
-
-    if (
-      resourceFromState &&
-      !validateResourceParameter(resourceFromState, c.req.url)
-    ) {
-      logWarn("Invalid resource parameter in authorization approval", {
-        loggerScope: ["cloudflare", "oauth", "authorize"],
-        extra: {
-          resource: resourceFromState,
-          clientId: oauthReqWithPermissions.clientId,
-        },
-      });
-
-      return createResourceValidationError(
-        oauthReqWithPermissions.redirectUri,
-        oauthReqWithPermissions.state,
-      );
-    }
-
-    // Validate redirectUri is registered for this client before proceeding
+    // Validate redirectUri first to prevent open redirects from error responses
     try {
       const client = await c.env.OAUTH_PROVIDER.lookupClient(
         oauthReqWithPermissions.clientId,
@@ -210,6 +189,26 @@ export default new Hono<{ Bindings: Env }>()
         extra: { error: String(lookupErr) },
       });
       return c.text("Invalid request", 400);
+    }
+
+    // Validate resource parameter (RFC 8707)
+    const resourceFromState = oauthReqWithPermissions.resource;
+    if (
+      resourceFromState &&
+      !validateResourceParameter(resourceFromState, c.req.url)
+    ) {
+      logWarn("Invalid resource parameter in authorization approval", {
+        loggerScope: ["cloudflare", "oauth", "authorize"],
+        extra: {
+          resource: resourceFromState,
+          clientId: oauthReqWithPermissions.clientId,
+        },
+      });
+
+      return createResourceValidationError(
+        oauthReqWithPermissions.redirectUri,
+        oauthReqWithPermissions.state,
+      );
     }
 
     // Build signed state for redirect to Sentry (10 minute validity)
