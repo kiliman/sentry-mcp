@@ -23,12 +23,22 @@ import { parseArgv, parseEnv, merge } from "./cli/parse";
 import { finalize } from "./cli/resolve";
 import { sentryBeforeSend } from "./telem/sentry";
 import { ALL_SCOPES } from "./permissions";
-import { DEFAULT_SCOPES } from "./constants";
-import { configureOpenAIProvider } from "./internal/agents/openai-provider";
+import { DEFAULT_SCOPES, DEFAULT_SKILLS } from "./constants";
+import { SKILLS } from "./skills";
+import { setOpenAIBaseUrl } from "./internal/agents/openai-provider";
 import agentTools from "./tools/agent-tools";
 
 const packageName = "@sentry/mcp-server";
-const usageText = buildUsage(packageName, DEFAULT_SCOPES, ALL_SCOPES);
+const allSkills = Object.keys(SKILLS) as ReadonlyArray<
+  (typeof SKILLS)[keyof typeof SKILLS]["id"]
+>;
+const usageText = buildUsage(
+  packageName,
+  DEFAULT_SCOPES,
+  ALL_SCOPES,
+  DEFAULT_SKILLS,
+  allSkills,
+);
 
 function die(message: string): never {
   console.error(message);
@@ -71,7 +81,12 @@ if (!process.env.OPENAI_API_KEY) {
   console.warn("");
 }
 
-configureOpenAIProvider({ baseUrl: cfg.openaiBaseUrl });
+// Configure OpenAI settings from CLI flags
+// Note: baseUrl can only be set via CLI flag, not env var (security: prevents credential theft)
+setOpenAIBaseUrl(cfg.openaiBaseUrl);
+if (cfg.openaiModel) {
+  process.env.OPENAI_MODEL = cfg.openaiModel;
+}
 
 Sentry.init({
   dsn: cfg.sentryDsn,
@@ -116,6 +131,7 @@ const SENTRY_TIMEOUT = 5000; // 5 seconds
 const context = {
   accessToken: cfg.accessToken,
   grantedScopes: cfg.finalScopes,
+  grantedSkills: cfg.finalSkills,
   constraints: {
     organizationSlug: cfg.organizationSlug ?? null,
     projectSlug: cfg.projectSlug ?? null,

@@ -16,17 +16,17 @@ import { signState, type OAuthState } from "../state";
 import { logWarn } from "@sentry/mcp-server/telem/logging";
 
 /**
- * Extended AuthRequest that includes permissions and resource parameter
+ * Extended AuthRequest that includes skills and resource parameter
  */
-interface AuthRequestWithPermissions extends AuthRequest {
-  permissions?: unknown;
+interface AuthRequestWithSkills extends AuthRequest {
+  skills?: unknown;
   resource?: string;
 }
 
 async function redirectToUpstream(
   env: Env,
   request: Request,
-  oauthReqInfo: AuthRequest | AuthRequestWithPermissions,
+  oauthReqInfo: AuthRequest | AuthRequestWithSkills,
   headers: Record<string, string> = {},
   stateOverride?: string,
 ) {
@@ -82,7 +82,10 @@ export default new Hono<{ Bindings: Env }>()
     const requestUrl = new URL(c.req.url);
     const resourceParam = requestUrl.searchParams.get("resource");
 
-    if (resourceParam && !validateResourceParameter(resourceParam, c.req.url)) {
+    if (
+      resourceParam !== null &&
+      !validateResourceParameter(resourceParam, c.req.url)
+    ) {
       logWarn("Invalid resource parameter in authorization request", {
         loggerScope: ["cloudflare", "oauth", "authorize"],
         extra: {
@@ -103,7 +106,7 @@ export default new Hono<{ Bindings: Env }>()
     }
 
     // Preserve resource in state, not exported upstream
-    const oauthReqInfoWithResource: AuthRequestWithPermissions = {
+    const oauthReqInfoWithResource: AuthRequestWithSkills = {
       ...oauthReqInfo,
       ...(resourceParam ? { resource: resourceParam } : {}),
     };
@@ -152,33 +155,33 @@ export default new Hono<{ Bindings: Env }>()
       return c.text("Invalid request", 400);
     }
 
-    const { state, headers, permissions } = result;
+    const { state, headers, skills } = result;
 
     if (!state.oauthReqInfo) {
       return c.text("Invalid request", 400);
     }
 
-    // Store the selected permissions in the OAuth request info
+    // Store the selected skills in the OAuth request info
     // This will be passed through to the callback via the state parameter
-    const oauthReqWithPermissions = {
+    const oauthReqWithSkills = {
       ...state.oauthReqInfo,
-      permissions,
+      skills,
     };
 
     // Validate redirectUri first to prevent open redirects from error responses
     try {
       const client = await c.env.OAUTH_PROVIDER.lookupClient(
-        oauthReqWithPermissions.clientId,
+        oauthReqWithSkills.clientId,
       );
       const uriIsAllowed =
         Array.isArray(client?.redirectUris) &&
-        client.redirectUris.includes(oauthReqWithPermissions.redirectUri);
+        client.redirectUris.includes(oauthReqWithSkills.redirectUri);
       if (!uriIsAllowed) {
         logWarn("Redirect URI not registered for client", {
           loggerScope: ["cloudflare", "oauth", "authorize"],
           extra: {
-            clientId: oauthReqWithPermissions.clientId,
-            redirectUri: oauthReqWithPermissions.redirectUri,
+            clientId: oauthReqWithSkills.clientId,
+            redirectUri: oauthReqWithSkills.redirectUri,
           },
         });
         return c.text("Invalid redirect URI", 400);
@@ -192,29 +195,29 @@ export default new Hono<{ Bindings: Env }>()
     }
 
     // Validate resource parameter (RFC 8707)
-    const resourceFromState = oauthReqWithPermissions.resource;
+    const resourceFromState = oauthReqWithSkills.resource;
     if (
-      resourceFromState &&
+      resourceFromState !== undefined &&
       !validateResourceParameter(resourceFromState, c.req.url)
     ) {
       logWarn("Invalid resource parameter in authorization approval", {
         loggerScope: ["cloudflare", "oauth", "authorize"],
         extra: {
           resource: resourceFromState,
-          clientId: oauthReqWithPermissions.clientId,
+          clientId: oauthReqWithSkills.clientId,
         },
       });
 
       return createResourceValidationError(
-        oauthReqWithPermissions.redirectUri,
-        oauthReqWithPermissions.state,
+        oauthReqWithSkills.redirectUri,
+        oauthReqWithSkills.state,
       );
     }
 
     // Build signed state for redirect to Sentry (10 minute validity)
     const now = Date.now();
     const payload: OAuthState = {
-      req: oauthReqWithPermissions as unknown as Record<string, unknown>,
+      req: oauthReqWithSkills as unknown as Record<string, unknown>,
       iat: now,
       exp: now + 10 * 60 * 1000,
     };
@@ -223,7 +226,7 @@ export default new Hono<{ Bindings: Env }>()
     return redirectToUpstream(
       c.env,
       c.req.raw,
-      oauthReqWithPermissions,
+      oauthReqWithSkills,
       headers,
       signedState,
     );

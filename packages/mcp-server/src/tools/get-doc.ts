@@ -5,10 +5,12 @@ import { fetchWithTimeout } from "../internal/fetch-utils";
 import { UserInputError } from "../errors";
 import { ApiError } from "../api-client/index";
 import type { ServerContext } from "../types";
+import { USER_AGENT } from "../version";
 
 export default defineTool({
   name: "get_doc",
-  requiredScopes: ["docs"], // Documentation reading requires docs permission
+  requiredSkills: ["docs"], // Only available in docs skill
+  requiredScopes: [], // No Sentry API scopes required - authorization via 'docs' skill
   description: [
     "Fetch the full markdown content of a Sentry documentation page.",
     "",
@@ -75,7 +77,7 @@ export default defineTool({
       {
         headers: {
           Accept: "text/plain, text/markdown",
-          "User-Agent": "Sentry-MCP/1.0",
+          "User-Agent": USER_AGENT,
         },
       },
       15000, // 15 second timeout

@@ -480,5 +480,69 @@ describe("oauth callback routes", () => {
       const text = await response.text();
       expect(text).toContain("Invalid resource parameter");
     });
+
+    it("should reject empty resource parameter", async () => {
+      mockOAuthProvider.lookupClient.mockResolvedValue({
+        clientId: "test-client",
+        clientName: "Test Client",
+        redirectUris: ["https://example.com/callback"],
+      });
+
+      const now = Date.now();
+      const payload: OAuthState = {
+        req: {
+          clientId: "test-client",
+          redirectUri: "https://example.com/callback",
+          scope: ["read"],
+          resource: "",
+        },
+        iat: now,
+        exp: now + 10 * 60 * 1000,
+      } as unknown as OAuthState;
+      const signedState = await signState(payload, testEnv.COOKIE_SECRET!);
+
+      // Get approval cookie
+      const validApprovalFormData = new FormData();
+      validApprovalFormData.append(
+        "state",
+        btoa(
+          JSON.stringify({
+            oauthReqInfo: {
+              clientId: "test-client",
+              redirectUri: "https://example.com/callback",
+              scope: ["read"],
+            },
+          }),
+        ),
+      );
+      const validApprovalRequest = new Request(
+        "http://localhost/oauth/authorize",
+        {
+          method: "POST",
+          body: validApprovalFormData,
+        },
+      );
+      const validApprovalResponse = await app.fetch(
+        validApprovalRequest,
+        testEnv as Env,
+      );
+      const setCookie = validApprovalResponse.headers.get("Set-Cookie");
+
+      const request = new Request(
+        `http://localhost/oauth/callback?code=test-code&state=${signedState}`,
+        {
+          method: "GET",
+          headers: {
+            Cookie: setCookie!.split(";")[0],
+          },
+        },
+      );
+
+      const response = await app.fetch(request, testEnv as Env);
+
+      expect(response.status).toBe(400);
+      const text = await response.text();
+      expect(text).toContain("Invalid resource parameter");
+    });
   });
 });
